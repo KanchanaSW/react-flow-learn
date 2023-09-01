@@ -1,92 +1,92 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import ReactFlow, {
+  ReactFlowProvider,
+  addEdge,
   useNodesState,
   useEdgesState,
-  addEdge,
-  useReactFlow,
-  ReactFlowProvider,
+  Controls,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+
+import Sidebar from './Sidebar';
 
 import './index.css';
 
 const initialNodes = [
   {
-    id: '0',
+    id: '1',
     type: 'input',
-    data: { label: 'Node' },
-    position: { x: 0, y: 50 },
+    data: { label: 'input node' },
+    position: { x: 250, y: 5 },
   },
 ];
 
-let id = 1;
-const getId = () => `${id++}`;
+let id = 0;
+const getId = () => `dndnode_${id++}`;
 
-const fitViewOptions = {
-  padding: 3,
-};
-
-const AddNodeOnEdgeDrop = () => {
+const DnDFlow = () => {
   const reactFlowWrapper = useRef(null);
-  const connectingNodeId = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const { project } = useReactFlow();
-  const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    []
-  );
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
 
-  const onConnectStart = useCallback((_, { nodeId }) => {
-    connectingNodeId.current = nodeId;
+  const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), []);
+
+  const onDragOver = useCallback((event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  const onConnectEnd = useCallback(
+  const onDrop = useCallback(
     (event) => {
-      const targetIsPane = event.target.classList.contains('react-flow__pane');
+      event.preventDefault();
 
-      if (targetIsPane) {
-        // we need to remove the wrapper bounds, in order to get the correct position
-        const { top, left } = reactFlowWrapper.current.getBoundingClientRect();
-        const id = getId();
-        const newNode = {
-          id,
-          // we are removing the half of the node width (75) to center the new node
-          position: project({
-            x: event.clientX - left - 75,
-            y: event.clientY - top,
-          }),
-          data: { label: `Node ${id}` },
-        };
+      const reactFlowBounds = reactFlowWrapper.current.getBoundingClientRect();
+      const type = event.dataTransfer.getData('application/reactflow');
 
-        setNodes((nds) => nds.concat(newNode));
-        setEdges((eds) =>
-          eds.concat({ id, source: connectingNodeId.current, target: id })
-        );
+      // check if the dropped element is valid
+      if (typeof type === 'undefined' || !type) {
+        return;
       }
+
+      const position = reactFlowInstance.project({
+        x: event.clientX - reactFlowBounds.left,
+        y: event.clientY - reactFlowBounds.top,
+      });
+      const newNode = {
+        id: getId(),
+        type,
+        position,
+        data: { label: `${type} node` },
+      };
+
+      setNodes((nds) => nds.concat(newNode));
     },
-    [project]
+    [reactFlowInstance]
   );
 
   return (
-    <div className="wrapper" ref={reactFlowWrapper}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onConnectStart={onConnectStart}
-        onConnectEnd={onConnectEnd}
-        fitView
-        fitViewOptions={fitViewOptions}
-      />
+    <div className="dndflow">
+      <ReactFlowProvider>
+        <div className="reactflow-wrapper" ref={reactFlowWrapper}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onInit={setReactFlowInstance}
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            fitView
+          >
+            <Controls />
+          </ReactFlow>
+        </div>
+        <Sidebar />
+      </ReactFlowProvider>
     </div>
   );
 };
 
-export default () => (
-  <ReactFlowProvider>
-    <AddNodeOnEdgeDrop />
-  </ReactFlowProvider>
-);
+export default DnDFlow;
